@@ -1,0 +1,6 @@
+{
+  "name": "Aplikasi Guru SDN 2 Sarigadung",
+  "description": "Sistem administrasi akademik Guru & Admin SDN 2 Sarigadung v2.6.2-stable dengan presensi harian, jurnal mengajar, RPP, E-Raport (10 mata pelajaran), dan sinkronisasi dua arah Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
