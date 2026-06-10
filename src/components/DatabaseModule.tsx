@@ -21,6 +21,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Student, Teacher, AttendanceRecord, JurnalRecord, RppRecord, StudentGrade } from '../types';
+import { GAS_CODE_TEMPLATE } from '../data';
 
 interface DatabaseModuleProps {
   students: Student[];
@@ -68,6 +69,42 @@ export default function DatabaseModule({
 }: DatabaseModuleProps) {
   const [importJson, setImportJson] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // States for permanent database code generator
+  const [showCodeGenerator, setShowCodeGenerator] = useState(false);
+  const [copiedCodeCode, setCopiedCodeCode] = useState(false);
+
+  const generateDataTSComplete = () => {
+    const formattedTeachers = JSON.stringify(teachers, null, 2);
+    const formattedStudents = JSON.stringify(students, null, 2);
+    const formattedAttendance = JSON.stringify(attendanceRecords, null, 2);
+    const formattedJournals = JSON.stringify(jurnalRecords, null, 2);
+    const formattedRpp = JSON.stringify(rppRecords, null, 2);
+    const formattedGrades = JSON.stringify(grades, null, 2);
+    
+    return `import { Student, Teacher, AttendanceRecord, JurnalRecord, RppRecord, StudentGrade } from './types';
+
+// Static Data Presets for SDN 2 Sarigadung (v2.6.2-stable) By Bu Mei
+export const PRESET_TEACHERS: Teacher[] = ${formattedTeachers};
+
+export const PRESET_STUDENTS: Student[] = ${formattedStudents};
+
+// Presensi Harian Seeding
+export const PRESET_ATTENDANCE: AttendanceRecord[] = ${formattedAttendance};
+
+// Jurnal Mengajar Seeding
+export const PRESET_JURANAL: JurnalRecord[] = ${formattedJournals};
+
+// RPP Seeding
+export const PRESET_RPP: RppRecord[] = ${formattedRpp};
+
+// E-Raport (10 Subject Grades) Seeding untuk Kelas IV A
+export const PRESET_GRADES: StudentGrade[] = ${formattedGrades};
+
+// Google Apps Script source code that will be displayed in the instructions
+export const GAS_CODE_TEMPLATE = \`${GAS_CODE_TEMPLATE.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`;
+`;
+  };
 
   // Persistent upload results tracking
   const [lastStudentUpload, setLastStudentUpload] = useState<{
@@ -1509,6 +1546,182 @@ export default function DatabaseModule({
             </button>
           </form>
         </div>
+
+      </div>
+
+      {/* 💾 DESIGN PERMANENT EMBEDDING PLATFORM */}
+      <div className="border border-indigo-200 dark:border-indigo-900 rounded-2xl p-6 bg-gradient-to-r from-indigo-50/30 to-purple-50/20 dark:from-slate-900/60 dark:to-slate-950/60 space-y-6 text-left">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+             <div className="p-3 bg-indigo-900 text-white rounded-2xl shrink-0 shadow-xs">
+               <Database className="w-5 h-5 animate-pulse" />
+             </div>
+             <div>
+               <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+                 <span>💾 Integrasi Database Permanen (Melekat di Aplikasi)</span>
+                 <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950/70 text-indigo-750 dark:text-indigo-400 font-black px-2 py-0.5 rounded-full uppercase">SINKRONISASI MUTLAK</span>
+               </h3>
+               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                 Agar data murid dan staf guru yang baru saja Anda ubah atau unggah tidak terhapus saat cache browser dibersihkan, dan langsung <strong>melekat secara permanen</strong> di aplikasi (termasuk saat dibuka di HP lain atau dideploy ke GitHub!), gunakan salah satu metode berikut:
+               </p>
+             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* Tingkat 1 */}
+          <div className="border border-slate-200 dark:border-slate-800 p-4 rounded-xl bg-white dark:bg-slate-900/40 space-y-2 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[10px] uppercase">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                <span>Level-1: Browser Lokal</span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Penyimpanan Terisolasi</h4>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-sans">
+                Saat ini data baru Anda sudah langsung disimpan aman di memori lokal browser perangkat ini. Tidak hilang saat tab ditutup atau saat mati internet. Namun bisa terhapus jika Anda menghapus riwayat browser penuh.
+              </p>
+            </div>
+            <div className="bg-emerald-50/50 dark:bg-emerald-950/25 p-2 rounded-lg text-[9px] text-emerald-800 dark:text-emerald-400 font-sans font-semibold text-center border border-emerald-100/30">
+              ✔️ Aktif Instan di Perangkat Ini
+            </div>
+          </div>
+
+          {/* Tingkat 2 */}
+          <div className="border border-slate-200 dark:border-slate-800 p-4 rounded-xl bg-white dark:bg-slate-900/40 space-y-2 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                <span>Level-2: Multi-Device</span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-700 dark:text-slate-300">WhatsApp / Tautan Berbagi</h4>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed font-sans">
+                Gunakan tab <strong>Hub Sinkron</strong> untuk meregistrasikan Google Spreadsheet. Begitu terhubung, Anda akan mendapat tautan berbagi kustom. Bagikan ke HP guru atau kepala sekolah agar HP mereka langsung auto-load database Anda dari Google Sheets saat pertama kali dibuka!
+              </p>
+            </div>
+            <div className="bg-blue-50/50 dark:bg-blue-950/25 p-2 rounded-lg text-[9px] text-blue-800 dark:text-blue-400 font-sans font-semibold text-center border border-blue-100/30">
+              🔗 Gunakan &quot;Hub Sinkron&quot; di Atas
+            </div>
+          </div>
+
+          {/* Tingkat 3 */}
+          <div className="border border-indigo-200 dark:border-indigo-900/60 p-4 rounded-xl bg-indigo-50/20 dark:bg-indigo-950/5 space-y-2 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-indigo-650 dark:text-indigo-400 font-bold text-[10px] uppercase">
+                <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-ping" />
+                <span>Level-3: Kode GitHub</span>
+              </div>
+              <h4 className="text-xs font-extrabold text-indigo-750 dark:text-indigo-300 font-sans">Melekat Permanen Seutuhnya</h4>
+              <p className="text-[10px] text-slate-450 dark:text-slate-400 leading-relaxed font-sans">
+                Jadikan database Anda saat ini sebagai database default aplikasi (melekat permanen) di semua perangkat di seluruh dunia tanpa perlu Google Sheets atau internet. Klik tombol di bawah untuk men-generate file kode baru, lalu gantikan file <code className="font-mono">src/data.ts</code> asli Anda di folder GitHub.
+              </p>
+            </div>
+            <button
+              id="btn-trigger-preset-codegen"
+              type="button"
+              onClick={() => setShowCodeGenerator(!showCodeGenerator)}
+              className="py-1.5 px-3 bg-indigo-900 hover:bg-indigo-850 text-white rounded-lg text-[9px] font-bold text-center transition-all cursor-pointer shadow-xs uppercase tracking-wider"
+            >
+              {showCodeGenerator ? 'Sembunyikan Panel Kode ❌' : 'Ambil Kode data.ts Baru 🌟'}
+            </button>
+          </div>
+
+        </div>
+
+        {/* Dynamic Code Generator Screen with Smooth Fade Transition */}
+        {showCodeGenerator && (
+          <div className="bg-slate-950 text-slate-100 p-5 rounded-2xl space-y-3 shadow-inner max-w-full overflow-hidden text-left border border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div className="space-y-1">
+                <span className="text-[10px] bg-slate-800 text-indigo-400 font-mono px-2 py-0.5 rounded font-bold">
+                  src/data.ts (GENERATED)
+                </span>
+                <p className="text-[10px] text-slate-450">
+                  Semua data murid ({students.length}), guru ({teachers.length}), nilai, jurnal, & RPP saat ini telah diproyeksikan langsung ke dalam kode statis.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Copy button */}
+                <button
+                  id="btn-copy-generated-codegen"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const completeCode = generateDataTSComplete();
+                      await navigator.clipboard.writeText(completeCode);
+                      setCopiedCodeCode(true);
+                      setTimeout(() => setCopiedCodeCode(false), 2500);
+                    } catch (err) {
+                      console.error("Gagal menyalin", err);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    copiedCodeCode ? 'bg-emerald-600 text-white border-transparent' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-750 font-sans'
+                  }`}
+                  title="Salin Kode Lengkap"
+                >
+                  {copiedCodeCode ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Tersalin!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clipboard className="w-3.5 h-3.5" />
+                      <span>Salin Kode</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Direct File Download */}
+                <button
+                  id="btn-download-generated-codegen"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const completeCode = generateDataTSComplete();
+                      const blob = new Blob([completeCode], { type: 'text/typescript;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', 'data.ts');
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                      showStatus('success', 'File data.ts kustom baru berhasil diunduh. Siap dimasukkan di folder src/.');
+                    } catch (err) {
+                      showStatus('error', 'Gagal meluncurkan unduhan data.ts.');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-900 hover:bg-indigo-850 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
+                  title="Unduh langsung file data.ts"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh data.ts</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Step-by-step github integration tutorial */}
+            <div className="p-3 bg-indigo-950/40 rounded-xl border border-indigo-900/40 text-[10px] text-indigo-300 font-sans space-y-1 leading-relaxed">
+              <span className="font-extrabold flex items-center gap-1">
+                <span>💡 CARA MENERAPKAN KODE INI DI GITHUB AGAR MELEKAT PERMANEN:</span>
+              </span>
+              <ol className="list-decimal list-inside pl-1 space-y-0.5">
+                <li>Klik tombol <strong>&quot;Unduh data.ts&quot;</strong> di atas untuk mengunduh berkas kode database hasil kompilasi.</li>
+                <li>Buka folder proyek Anda, lalu pindahkan/tumpuk berkas tersebut menggantikan file di <code className="bg-slate-900 font-mono px-1 py-0.5 rounded text-yellow-500 text-[9.5px]">/src/data.ts</code> asli (menimpa file lama).</li>
+                <li>Lakukan Git Commit dan Git Push ke repositori GitHub Anda.</li>
+                <li>Selesai! Aplikasi Anda di seluruh dunia sekarang memiliki database kustom Anda seutuhnya sejak awal dibuka tanpa pernah takut hilang lagi! 🚀</li>
+              </ol>
+            </div>
+
+            {/* Code Box */}
+            <div className="relative max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 p-3 text-[9px] font-mono whitespace-pre text-slate-350 select-text leading-relaxed">
+              {generateDataTSComplete()}
+            </div>
+          </div>
+        )}
 
       </div>
 

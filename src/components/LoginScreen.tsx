@@ -251,7 +251,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         className="text-xs text-slate-400 dark:text-slate-600 mt-12 text-center"
       >
         Aplikasi Guru • SDN 2 Sarigadung <br />
-        Binaan Penasihat Akademik Bu Mei, S.Pd. • Dikembangkan Tahun 2026
+        Dikembangkan Secara Mandiri By Bu Mei, S.Pd. • Tahun 2026
       </motion.p>
     </div>
   );

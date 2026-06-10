@@ -70,6 +70,60 @@ function AutoSyncBanner({ syncState }: { syncState?: AutoSyncState }) {
   );
 }
 
+function InitialSyncBanner({ syncState, errorMsg, onRetry }: { syncState: 'idle' | 'syncing' | 'success' | 'error'; errorMsg?: string; onRetry?: () => void }) {
+  if (syncState === 'idle') return null;
+
+  const config = {
+    syncing: {
+      bg: 'bg-indigo-50/90 border-indigo-200/60 dark:bg-indigo-950/20 dark:border-indigo-900/60',
+      text: 'text-indigo-805 dark:text-indigo-350',
+      title: 'Menyinkronkan data langsung dari Google Sheets...',
+      desc: 'Tengah menyelaraskan data murid, guru, nilai, dan jurnal terupdate otomatis agar terus sinkron di semua perangkat.',
+      icon: <Loader2 className="w-5 h-5 text-indigo-650 dark:text-indigo-400 animate-spin" />
+    },
+    success: {
+      bg: 'bg-emerald-50/90 border-emerald-250/60 dark:bg-emerald-950/20 dark:border-emerald-900/60',
+      text: 'text-emerald-800 dark:text-emerald-305',
+      title: 'Koneksi Spreadsheet Aktif!',
+      desc: 'Database murid, guru, nilai, dan jurnal harian berhasil diselaraskan dari Google Sheets. ✨',
+      icon: <CheckCircle2 className="w-5 h-5 text-emerald-655 dark:text-emerald-400" />
+    },
+    error: {
+      bg: 'bg-amber-50/90 border-amber-200/60 dark:bg-amber-955/20 dark:border-amber-900/60',
+      text: 'text-amber-805 dark:text-amber-350',
+      title: 'Sinkronisasi Tertunda (Menggunakan Database Lokal)',
+      desc: 'Gagal mengunduh data terbaru: ' + (errorMsg || 'Masalah jaringan.') + ' Anda tetap dapat mengisi data secara offline, perubahan akan terkirim saat terhubung kembali.',
+      icon: <AlertTriangle className="w-5 h-5 text-amber-655 dark:text-amber-500" />
+    }
+  };
+
+  const current = config[syncState];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className={`mb-6 p-4 rounded-2xl border ${current.bg} flex items-start gap-4 shadow-xs text-xs font-sans font-medium`}
+    >
+      <div className="shrink-0 mt-0.5">{current.icon}</div>
+      <div className="flex-1 leading-snug text-left">
+        <p className={`font-bold text-sm ${current.text}`}>{current.title}</p>
+        <p className="text-slate-500 dark:text-slate-400 mt-1">{current.desc}</p>
+      </div>
+      {syncState === 'error' && onRetry && (
+        <button
+          onClick={onRetry}
+          type="button"
+          className="shrink-0 text-[10px] font-bold px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-850 dark:bg-amber-950/65 dark:text-amber-300 dark:hover:bg-amber-900/65 rounded-xl transition-all self-center"
+        >
+          Coba Hubungkan
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
 export default function App() {
   // Auth State
   const [portal, setPortal] = useState<'guest' | 'guru' | 'admin'>('guest');
@@ -87,10 +141,26 @@ export default function App() {
   const [gasUrl, setGasUrl] = useState('https://script.google.com/macros/s/AKfycbwBxZGeiMOQ-af5hKUNFCkeWxXTNhB2EDW5-IcsFVtsgkRr1kVJ8DZwMOWza8k-TxWFtw/exec');
   const [lastSynced, setLastSynced] = useState('');
 
+  // Simulating state (Simulation mode vs Live database connection)
+  const [isSimulating, setIsSimulating] = useState<boolean>(() => {
+    const cached = localStorage.getItem('sdn2_is_simulating_v2.6');
+    return cached === null ? true : cached === 'true';
+  });
+
+  // Auto-sync startup state (Auto background sync when opening the app)
+  const [autoSyncOnStartup, setAutoSyncOnStartup] = useState<boolean>(() => {
+    const cached = localStorage.getItem('sdn2_auto_sync_startup_v2.6');
+    return cached === null ? true : cached === 'true';
+  });
+
   // UI state metrics
   const [activeTab, setActiveTab ] = useState<'dashboard' | 'students' | 'teachers' | 'attendance' | 'grades' | 'journals' | 'rpp' | 'synchub' | 'database'>('dashboard');
   const [selfHealed, setSelfHealed] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState('');
+
+  // Start-up automatic pull sync status
+  const [initialSyncStatus, setInitialSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [initialSyncError, setInitialSyncError] = useState('');
 
   // Real-time synchronization state for individual tabs
   const [moduleSyncStates, setModuleSyncStates] = useState<Record<string, { status: 'idle' | 'sending' | 'success' | 'error'; message: string }>>({
@@ -128,7 +198,61 @@ export default function App() {
     LAST_SYNCED: 'sdn2_last_synced_v2.6',
   };
 
-  // 1. Initial State Hydration with Self-Healing Backup
+  // Helper background startup sync function
+  const runBackgroundStartupSync = async (urlToUse: string, forceLive: boolean) => {
+    if (!forceLive || !urlToUse) return;
+
+    setInitialSyncStatus('syncing');
+    setInitialSyncError('');
+    try {
+      const res = await fetch(`${urlToUse}?action=pull`);
+      const json = await res.json();
+      
+      if (json.status === "success" && json.data) {
+        const data = json.data;
+        if (data.students) {
+          setStudents(data.students);
+          persistCache(KEYS.STUDENTS, data.students);
+        }
+        if (data.teachers) {
+          setTeachers(data.teachers);
+          persistCache(KEYS.TEACHERS, data.teachers);
+        }
+        if (data.attendance) {
+          setAttendanceRecords(data.attendance);
+          persistCache(KEYS.ATTENDANCE, data.attendance);
+        }
+        if (data.journals) {
+          setJurnalRecords(data.journals);
+          persistCache(KEYS.JOURNALS, data.journals);
+        }
+        if (data.rpp) {
+          setRppRecords(data.rpp);
+          persistCache(KEYS.RPP, data.rpp);
+        }
+        if (data.grades) {
+          setGrades(data.grades);
+          persistCache(KEYS.GRADES, data.grades);
+        }
+
+        const dateStr = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+        setLastSynced(dateStr);
+        localStorage.setItem(KEYS.LAST_SYNCED, dateStr);
+
+        setInitialSyncStatus('success');
+        setTimeout(() => setInitialSyncStatus('idle'), 4500);
+      } else {
+        throw new Error(json.message || "Terdapat anomali respon dari server Spreadsheet.");
+      }
+    } catch (err: any) {
+      console.error("Startup background pull failed:", err);
+      setInitialSyncStatus('error');
+      setInitialSyncError(err.message || 'Koneksi lambat/bermasalah.');
+      setTimeout(() => setInitialSyncStatus('idle'), 6000);
+    }
+  };
+
+  // 1. Initial State Hydration with Self-Healing Backup and URL Parameter Integration
   useEffect(() => {
     try {
       const cachedStudents = localStorage.getItem(KEYS.STUDENTS);
@@ -200,17 +324,58 @@ export default function App() {
       const defaultUrl = 'https://script.google.com/macros/s/AKfycbwBxZGeiMOQ-af5hKUNFCkeWxXTNhB2EDW5-IcsFVtsgkRr1kVJ8DZwMOWza8k-TxWFtw/exec';
       const oldUrl1 = 'https://script.google.com/macros/s/AKfycbxGp8TrMvFfunuwxotuhzHLFkOmZK1oZQ-Sh6Mqf9niFmYCl8_Qr6TfYb6A-vDGu2qA/exec';
       const oldUrl2 = 'https://script.google.com/macros/s/AKfycbzfzolf-A_8DGA39iDK-uK61tLNM-qR_IkwTTPkEE56QfVNa-A8f_OTugtNm3Oc-7SpZg/exec';
-      if (cachedGasUrl && cachedGasUrl !== oldUrl1 && cachedGasUrl !== oldUrl2) {
+
+      // Read URL query parameters for extreme ease of cross-device deployment
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlParam = searchParams.get('gasUrl') || searchParams.get('syncUrl');
+      const simParam = searchParams.get('sim');
+
+      let targetUrl = defaultUrl;
+      let targetSimulating = true;
+
+      // Check cache for simulation state first
+      const cachedSimState = localStorage.getItem('sdn2_is_simulating_v2.6');
+      if (cachedSimState !== null) {
+        targetSimulating = cachedSimState === 'true';
+      }
+
+      // Check URL parameters for auto configuration
+      if (urlParam) {
+        targetUrl = decodeURIComponent(urlParam);
+        localStorage.setItem(KEYS.GAS_URL, targetUrl);
+        setGasUrl(targetUrl);
+
+        // Auto disable simulation since they loaded a designated sheet link
+        targetSimulating = false;
+        localStorage.setItem('sdn2_is_simulating_v2.6', 'false');
+        setIsSimulating(false);
+      } else if (cachedGasUrl && cachedGasUrl !== oldUrl1 && cachedGasUrl !== oldUrl2) {
+        targetUrl = cachedGasUrl;
         setGasUrl(cachedGasUrl);
       } else {
         setGasUrl(defaultUrl);
         localStorage.setItem(KEYS.GAS_URL, defaultUrl);
       }
+
+      if (simParam !== null) {
+        targetSimulating = simParam === 'true';
+        localStorage.setItem('sdn2_is_simulating_v2.6', simParam);
+        setIsSimulating(targetSimulating);
+      }
+
       if (cachedLastSynced) setLastSynced(cachedLastSynced);
 
       if (triggeredHealing) {
         setSelfHealed(true);
         setTimeout(() => setSelfHealed(false), 5000);
+      }
+
+      // Run startup sync if autoSync is active and simulator is OFF
+      const cachedAutoSync = localStorage.getItem('sdn2_auto_sync_startup_v2.6');
+      const resolvedAutoSync = cachedAutoSync === null ? true : cachedAutoSync === 'true';
+
+      if (resolvedAutoSync && !targetSimulating) {
+        runBackgroundStartupSync(targetUrl, true);
       }
     } catch (e) {
       console.error("Hydration error, resetting to defaults", e);
@@ -225,6 +390,13 @@ export default function App() {
       console.error(`Failed to cache ${key}`, error);
     }
   };
+
+  // Permissions Guard: Auto redirect restricted tabs to dashboard if a non-admin attempts access
+  useEffect(() => {
+    if (portal !== 'admin' && (activeTab === 'synchub' || activeTab === 'database')) {
+      setActiveTab('dashboard');
+    }
+  }, [portal, activeTab]);
 
   // Auth login action handler
   const handleLoginSuccess = (portalRole: 'guru' | 'admin', name: string) => {
@@ -517,6 +689,31 @@ export default function App() {
     localStorage.setItem(KEYS.LAST_SYNCED, dateStr);
   };
 
+  // 1b. Automatic Online Sync on Login (Master cloud hydration when entering the system)
+  useEffect(() => {
+    if (portal !== 'guest') {
+      const runInitialSync = async () => {
+        setInitialSyncStatus('syncing');
+        try {
+          // Pull live database directly from Apps Script URL
+          await onPullData(false);
+          setInitialSyncStatus('success');
+          setTimeout(() => {
+            setInitialSyncStatus('idle');
+          }, 5000);
+        } catch (error: any) {
+          console.error("Failed automatic starter pull from Google Sheets:", error);
+          setInitialSyncStatus('error');
+          setInitialSyncError(error.message || 'Gagal tersambung dengan Google Spreadsheet. Pastikan internet Anda aktif.');
+          setTimeout(() => {
+            setInitialSyncStatus('idle');
+          }, 8500);
+        }
+      };
+      runInitialSync();
+    }
+  }, [portal]);
+
   // Database maintenance operation handlers
   const handleResetDatabase = () => {
     setStudents(PRESET_STUDENTS);
@@ -710,7 +907,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 font-semibold font-sans mt-0.5">
-                v2.6.2-stable • Dibina Oleh Wali Kelas IV Bu Mei, S.Pd.
+                v2.6.2-stable • Dibuat & Dikembangkan By Bu Mei, S.Pd.
               </p>
             </div>
           </div>
@@ -868,32 +1065,36 @@ export default function App() {
               </button>
 
               {/* 8. Google Syncron */}
-              <button
-                id="sidebar-nav-synchub"
-                onClick={() => setActiveTab('synchub')}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all justify-start shrink-0 ${
-                  activeTab === 'synchub'
-                    ? 'bg-emerald-800 text-white border border-emerald-700/50 shadow-sm'
-                    : 'text-emerald-100/80 hover:text-white hover:bg-emerald-800/40'
-                }`}
-              >
-                <Database className="w-4 h-4 text-emerald-400" />
-                <span>Google Syncron</span>
-              </button>
+              {portal === 'admin' && (
+                <button
+                  id="sidebar-nav-synchub"
+                  onClick={() => setActiveTab('synchub')}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all justify-start shrink-0 ${
+                    activeTab === 'synchub'
+                      ? 'bg-emerald-800 text-white border border-emerald-700/50 shadow-sm'
+                      : 'text-emerald-100/80 hover:text-white hover:bg-emerald-800/40'
+                  }`}
+                >
+                  <Database className="w-4 h-4 text-emerald-400" />
+                  <span>Google Syncron</span>
+                </button>
+              )}
 
               {/* 9. Database */}
-              <button
-                id="sidebar-nav-database"
-                onClick={() => setActiveTab('database')}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all justify-start shrink-0 ${
-                  activeTab === 'database'
-                    ? 'bg-emerald-800 text-white border border-emerald-700/50 shadow-sm'
-                    : 'text-emerald-100/80 hover:text-white hover:bg-emerald-800/40'
-                }`}
-              >
-                <Activity className="w-4 h-4 text-emerald-400" />
-                <span>Database</span>
-              </button>
+              {portal === 'admin' && (
+                <button
+                  id="sidebar-nav-database"
+                  onClick={() => setActiveTab('database')}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all justify-start shrink-0 ${
+                    activeTab === 'database'
+                      ? 'bg-emerald-800 text-white border border-emerald-700/50 shadow-sm'
+                      : 'text-emerald-100/80 hover:text-white hover:bg-emerald-800/40'
+                  }`}
+                >
+                  <Activity className="w-4 h-4 text-emerald-400" />
+                  <span>Database</span>
+                </button>
+              )}
 
             </nav>
 
@@ -939,9 +1140,39 @@ export default function App() {
                 </h1>
               </div>
 
+              {/* Startup automatic background synchronization */}
+              <AnimatePresence mode="wait">
+                <InitialSyncBanner 
+                  syncState={initialSyncStatus} 
+                  errorMsg={initialSyncError} 
+                  onRetry={() => runBackgroundStartupSync(gasUrl, true)} 
+                />
+              </AnimatePresence>
+
               {/* 1. Dashboard View */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6">
+                  
+                  {/* Creator / Welcome Banner */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h2 className="text-lg font-black text-slate-850 dark:text-white flex items-center gap-2">
+                        <span>👋 Selamat Datang di Pusat Administrasi Digital</span>
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Sistem informasi pembelajaran terpadu SDN 2 Sarigadung.
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/10 border border-indigo-100 dark:border-indigo-900/60 px-4 py-2.5 rounded-xl shrink-0 flex items-center gap-2.5 text-left shadow-xs">
+                      <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-extrabold text-xs">
+                        BM
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-indigo-650 dark:text-indigo-400 font-extrabold uppercase tracking-wider">Dibuat & Dikembangkan By</p>
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">Bu Mei, S.Pd.</p>
+                      </div>
+                    </div>
+                  </div>
                   
                   {/* Bento statistics grid counters */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1141,32 +1372,16 @@ export default function App() {
                     {/* Interactive School Profile / Teacher sidebar summary - Natural Tones Emerald Banner */}
                     <div className="lg:col-span-1 space-y-6">
                       
-                      {/* Active Wali Kelas info */}
-                      <div className="bg-emerald-900 text-white p-6 rounded-2xl shadow-sm border border-emerald-950 space-y-4">
-                        <span className="text-[10px] px-2 py-0.5 bg-emerald-800 border border-emerald-700/50 rounded-lg text-emerald-300 font-extrabold uppercase tracking-wider">Unit Kerja</span>
-                        <h3 className="font-bold text-base leading-snug text-white">SDN 2 Sarigadung Koto</h3>
-                        
-                        <div className="space-y-2.5 text-xs text-emerald-100/80">
-                          <p>
-                            <strong>Alamat:</strong> Jl. Sarigadung No.12, Kec. Simpang Empat, Kabupaten Tanah Bumbu, Kalimantan Selatan 72211.
-                          </p>
-                          <p>
-                            <strong>Sandi Sekolah:</strong> Terintegrasi di bawah naungan Kepala Sekolah & Diknas Cabang Batulicin.
-                          </p>
+                      {/* Developer / Creator Card */}
+                      <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 rounded-2xl shadow-md border border-indigo-950 space-y-3">
+                        <span className="text-[10px] px-2 py-0.5 bg-indigo-800 border border-indigo-700/50 rounded-lg text-indigo-200 font-extrabold uppercase tracking-wider">Pembuat & Pengembang</span>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-indigo-100">Bu Mei, S.Pd.</h4>
+                          <p className="text-[11px] text-indigo-300">Wali Kelas IV A & Inovator Sistem</p>
                         </div>
-                      </div>
-
-                      {/* Teacher quick roster list */}
-                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Staff Pengajar Binaan</h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {teachers.slice(0, 4).map(t => (
-                            <div key={t.id} className="flex justify-between items-center text-xs pb-2 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                              <span className="font-bold text-slate-700 dark:text-slate-300">{t.nama}</span>
-                              <span className="font-mono text-[10px] text-slate-450">{t.id}</span>
-                            </div>
-                          ))}
-                        </div>
+                        <p className="text-[10px] text-slate-300 leading-relaxed font-sans">
+                          Aplikasi ini dirancang dan dikembangkan secara mandiri oleh <strong>Bu Mei, S.Pd.</strong> guna mendigitalisasi administrasi harian, nilai e-raport, data presensi, dan modul modul ajar secara permanen.
+                        </p>
                       </div>
 
                     </div>
@@ -1264,6 +1479,16 @@ export default function App() {
                   onPullData={onPullData}
                   onPushData={onPushData}
                   lastSynced={lastSynced}
+                  isSimulating={isSimulating}
+                  setIsSimulating={(val) => {
+                    setIsSimulating(val);
+                    localStorage.setItem('sdn2_is_simulating_v2.6', String(val));
+                  }}
+                  autoSyncOnStartup={autoSyncOnStartup}
+                  setAutoSyncOnStartup={(val) => {
+                    setAutoSyncOnStartup(val);
+                    localStorage.setItem('sdn2_auto_sync_startup_v2.6', String(val));
+                  }}
                 />
               )}
 

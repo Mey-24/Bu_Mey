@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GAS_CODE_TEMPLATE } from '../data';
-import { Cloud, ArrowDownCircle, ArrowUpCircle, Info, Copy, Check, Settings, AlertTriangle, ShieldCheck, Loader2, PlayCircle, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { Cloud, ArrowDownCircle, ArrowUpCircle, Info, Copy, Check, Settings, AlertTriangle, ShieldCheck, Loader2, PlayCircle, ToggleLeft, ToggleRight, Sparkles, Link2 } from 'lucide-react';
 
 interface SyncHubProps {
   gasUrl: string;
@@ -9,12 +9,26 @@ interface SyncHubProps {
   onPullData: (isSimulation: boolean) => Promise<any>;
   onPushData: (isSimulation: boolean) => Promise<any>;
   lastSynced: string;
+  isSimulating: boolean;
+  setIsSimulating: (val: boolean) => void;
+  autoSyncOnStartup: boolean;
+  setAutoSyncOnStartup: (val: boolean) => void;
 }
 
-export default function SyncHub({ gasUrl, onSaveGasUrl, onPullData, onPushData, lastSynced }: SyncHubProps) {
+export default function SyncHub({ 
+  gasUrl, 
+  onSaveGasUrl, 
+  onPullData, 
+  onPushData, 
+  lastSynced,
+  isSimulating,
+  setIsSimulating,
+  autoSyncOnStartup,
+  setAutoSyncOnStartup
+}: SyncHubProps) {
   const [urlInput, setUrlInput] = useState(gasUrl);
   const [copied, setCopied] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(true); // Default simulator ON for flawless preview!
+  const [linkCopied, setLinkCopied] = useState(false);
   const [syncDirection, setSyncDirection] = useState<'pull' | 'push' | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error' | ''; msg: string }>({ type: '', msg: '' });
@@ -143,6 +157,36 @@ export default function SyncHub({ gasUrl, onSaveGasUrl, onPullData, onPushData, 
 
           {/* Connected indicators */}
           <div className="space-y-3 text-xs">
+            {/* Auto-Sync startup option */}
+            <div className="flex justify-between items-center py-1">
+              <div className="flex flex-col text-left pr-2">
+                <span className="text-[11px] font-bold text-slate-705 dark:text-slate-300 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                  Auto-Sync Buka Web
+                </span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight">
+                  Tarik database terbaru otomatis saat portal dibuka di HP/Device lain
+                </span>
+              </div>
+              <button
+                id="btn-toggle-auto-sync"
+                type="button"
+                onClick={() => setAutoSyncOnStartup(!autoSyncOnStartup)}
+                disabled={isSimulating}
+                className="focus:outline-none transition-all duration-250 shrink-0"
+                style={{ opacity: isSimulating ? 0.35 : 1, cursor: isSimulating ? 'not-allowed' : 'pointer' }}
+                title={isSimulating ? "Aktifkan Mode LIVE untuk mengaktifkan sinkronisasi otomatis" : "Aktifkan Auto-Sync Beralih"}
+              >
+                {autoSyncOnStartup && !isSimulating ? (
+                  <ToggleRight className="w-8 h-8 text-emerald-500 transition-colors" />
+                ) : (
+                  <ToggleLeft className="w-8 h-8 text-slate-400 dark:text-slate-650 transition-colors" />
+                )}
+              </button>
+            </div>
+
+            <div className="h-[1px] bg-slate-150/60 dark:bg-slate-800/40" />
+
             <div className="flex justify-between items-center font-medium">
               <span className="text-slate-400">Status Server</span>
               {isSimulating ? (
@@ -151,9 +195,9 @@ export default function SyncHub({ gasUrl, onSaveGasUrl, onPullData, onPushData, 
                   Simulated Local
                 </span>
               ) : gasUrl ? (
-                <span className="text-emerald-600 font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  Deploy Terdaftar
+                <span className="text-emerald-300 font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Koneksi LIVE Aktif
                 </span>
               ) : (
                 <span className="text-slate-400 font-semibold flex items-center gap-1.5">
@@ -248,6 +292,51 @@ export default function SyncHub({ gasUrl, onSaveGasUrl, onPullData, onPushData, 
             )}
           </AnimatePresence>
         </div>
+
+        {/* Link Berbagi Multi-Device Card */}
+        {!isSimulating && gasUrl && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-xs space-y-4 text-left">
+            <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-emerald-500" />
+              <span>Link Integrasi HP & perangkat lain</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+              Buka atau bagikan tautan khusus ini melalui WhatsApp agar HP/perangkat lain terkonfigurasi secara otomatis menggunakan database Google Spreadsheet saat ini tanpa perlu memasukkan tautan manual:
+            </p>
+            <div className="flex gap-2">
+              <input
+                id="share-link-input"
+                type="text"
+                readOnly
+                value={`${window.location.origin}${window.location.pathname}?gasUrl=${encodeURIComponent(gasUrl)}&sim=false`}
+                className="flex-1 px-3 py-2 text-[10px] font-mono rounded-xl bg-slate-50 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-805 text-slate-500 dark:text-slate-350 truncate outline-none"
+              />
+              <button
+                id="btn-copy-sharing-link"
+                type="button"
+                onClick={async () => {
+                  try {
+                    const shareUrl = `${window.location.origin}${window.location.pathname}?gasUrl=${encodeURIComponent(gasUrl)}&sim=false`;
+                    await navigator.clipboard.writeText(shareUrl);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2000);
+                  } catch (err) {
+                    console.error("Gagal menyalin tautan", err);
+                  }
+                }}
+                className={`p-2 rounded-xl text-xs font-bold text-white transition-all select-none flex items-center justify-center shrink-0 w-10 h-8 ${
+                  linkCopied ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'
+                }`}
+                title="Salin Tautan Berbagi"
+              >
+                {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold leading-tight font-sans">
+              💡 Tips: Bagikan link ini, lalu buka di browser smartphone Anda. Portal akan otomatis di-link ke Google Spreadsheet dan auto-sync database terbaru saat dibuka!
+            </p>
+          </div>
+        )}
 
       </div>
 
